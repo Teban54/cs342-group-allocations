@@ -1,8 +1,8 @@
 import random
 
 NUM_STUDENTS = 150
-NUM_TOPICS = 7
-TOPIC_DISTR = [30, 20, 20, 10, 8, 8, 3]
+NUM_TOPICS = 9
+TOPIC_DISTR = [5, 30, 30, 20, 20, 10, 10, 8, 8]
 FIND_GROUP_PROB = 0.5
 IGNORE_PROB = 0.05
 
@@ -15,9 +15,9 @@ def rand_string(len):
 def rand_preference(len=3):
     pref = []
     for i in range(len):
-        x = random.choices(list(range(1, NUM_TOPICS+1)), TOPIC_DISTR)[0]
+        x = random.choices(list(range(NUM_TOPICS)), TOPIC_DISTR)[0]
         while x in pref:
-            x = random.choices(list(range(1, NUM_TOPICS + 1)), TOPIC_DISTR)[0]
+            x = random.choices(list(range(NUM_TOPICS)), TOPIC_DISTR)[0]
         pref.append(x)
     return pref
 

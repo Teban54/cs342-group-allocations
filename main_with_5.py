@@ -1,8 +1,8 @@
 import random
 
-NETID_FILENAME = 'nets-nums.txt'
-PREFERENCE_FILENAME = 'pechaprefs.csv'
-OUTPUT_FILENAME = 'output1.txt'
+NETID_FILENAME = 'test_netids.txt'
+PREFERENCE_FILENAME = 'test_preferences.txt'
+OUTPUT_FILENAME = 'test_output.txt'
 
 # Parameters from problem statement
 # Strongly recommended NOT to change these.
@@ -10,19 +10,17 @@ OUTPUT_FILENAME = 'output1.txt'
 NUM_OPTIONS = 9  # This INCLUDES the "non-specified" option
 GROUP_SIZE = 4
 MIN_GROUP_SIZE = 3
-MAX_GROUP_SIZE = 4
+MAX_GROUP_SIZE = 5
 
 # Parameters introduced by the algorithm
 # NOTE: Feel free to fine tune this based on needs and performance
-PREF_VALUES = [8, 6, 3]  # Value gained by matching a person to its 1st, 2nd or 3rd choice, respectively (See README)
+PREF_VALUES = [8, 4, 2]  # Value gained by matching a person to its 1st, 2nd or 3rd choice, respectively (See README)
 IS_VALUE_PER_PERSON = True  # Whether the preference value above is gained by each person (i.e. 2x for a group of two), or by each group
 ODD_SIZE_GROUP_PENALTY = -3  # Penalty for each group whose size is not equal to GROUP_SIZE (typically negative)
-ENABLE_NON_SPECIFIED = True  # Whether a specific option represents "non-specified"
+ENABLE_NON_SPECIFIED = True  # Whether the LAST option represents "non-specified"
                              # If this is True, students who put "non-specified" as one of their preferences
                              # can be assigned to any topic, gaining the corresponding value.
-NON_SPECIFIED_CHOICE = 0  # The topic choice input that means "non-specified" (from actual input, not necessarily 0-indexed)
-                          # If -1: the last option will be interpreted as "non-specified"
-NUM_TRIALS = 3  # Number of random trials executed
+NUM_TRIALS = 2  # Number of random trials executed
 
 
 # ----------- DO NOT MODIFY anything below ----------- #
@@ -65,12 +63,7 @@ def read_prefs(filename):
     (These students may be allocated to any topic or group)
     :param filename: Name of file
     """
-    def ppl_to_str(p):
-        return ', '.join([netids[x] for x in p])
-    def pref_to_str(p):
-        return ', '.join([(str(x+1) if x != -1 else 'non-specified') for x in p])
-
-    pref_submitted = {}  # Map person IDs to number of times appeared
+    pref_submitted = set()
     with open(filename, 'r') as f:
         for line in f.readlines():
             if line.strip() == '':
@@ -78,98 +71,14 @@ def read_prefs(filename):
             arr = line.split(',')
             arr = [s.strip() for s in arr]
 
-            # Parse group and preferences
-            ppl = [netid_to_index[netid] for netid in arr[:-3] if netid in netid_to_index]  # Eliminate 9999 (no partner)
+            ppl = [netid_to_index[netid] for netid in arr[:-3]]
+            groups.append(ppl)
+            pref_submitted.update(ppl)
+
             pref = [(int(s)-1) for s in arr[-3:]]
             if ENABLE_NON_SPECIFIED:
-                pref = [(x if (x+1) != NON_SPECIFIED_CHOICE else -1) for x in pref]
-
-            # Check if group already exists
-            exist_index = -1
-            if ppl in groups:
-                exist_index = groups.index(ppl)
-            if ppl[::-1] in groups:  # Reverse order
-                exist_index = groups.index(ppl[::-1])
-            if exist_index != -1:
-                # Compare preferences for merging, by counting # of non-specified
-                exist_pref = prefs[exist_index]
-                if pref == exist_pref:  # Same preferences, no need to merge
-                    continue
-
-                pref_zeroes = sum(1 for x in pref if x == -1)
-                exist_pref_zeroes = sum(1 for x in exist_pref if x == -1)
-                merged_pref = exist_pref if exist_pref_zeroes <= pref_zeroes else pref
-
-                if pref_zeroes != len(pref) and exist_pref_zeroes != len(exist_pref):
-                    # Display warning message
-                    print('Warning: Pair %s has contradicting preferences submitted.' % ppl_to_str(groups[exist_index]))
-                    print('Preference submitted by pair %s: %s' % (ppl_to_str(groups[exist_index]), pref_to_str(exist_pref)))
-                    print('Preference submitted by pair %s: %s' % (ppl_to_str(ppl), pref_to_str(pref)))
-                    print('Program currently uses preference %s.' % pref_to_str(merged_pref))
-                    print()
-
-                prefs[exist_index] = merged_pref
-                continue
-
-            # Check if individuals already exist
-            if any(any(p in g for g in groups) for p in ppl):
-                keep_current = True  # Whether current group should be kept entirely
-                dups_all_members = set()  # Index of groups that contain any of the current group's members (discarded from list of groups later if keep_current)
-                members_to_discard = []  # Current group's members that are in other groups (discarded from current group later if not keep_current)
-                for p in ppl:
-                    dups = [i for i in range(len(groups)) if p in groups[i]]  # Indexes of groups that contain p
-                    if not dups:
-                        continue
-                    print('Warning: Person %s is in multiple groups: %s and Group %s.' % (
-                        netids[p],
-                        ', '.join(('Group ' + ppl_to_str(groups[i])) for i in dups),
-                        ppl_to_str(ppl)
-                    ))
-                    dups_same_len = [i for i in dups if len(groups[i]) >= len(ppl)]  # Index of groups above that have the same or greater size as current group
-                    if dups_same_len:
-                        # Full group that contains p already exists, disregard current group
-                        #print('Discarding Group %s with preference %s.' % (ppl_to_str(ppl), pref_to_str(pref)))
-                        keep_current = False
-                        members_to_discard.append(p)
-                    else:
-                        # p is only in groups with smaller sizes, these smaller groups will be discarded
-                        dups_all_members.update(dups)
-
-                if not keep_current:
-                    # First, try to remove members that are in other full groups
-                    # So that the current group can keep as many members as possible
-                    members_to_keep = [x for x in ppl if x not in members_to_discard]
-                    if members_to_keep:
-                        print('Discarding members %s from Group %s.' % (ppl_to_str(members_to_discard), ppl_to_str(ppl)))
-                        print('This group is left with members %s and preference %s.' % (ppl_to_str(members_to_keep), pref_to_str(pref)))
-                        ppl = members_to_keep
-                    else:
-                        # Discard current group completely
-                        print('Discarding Group %s with preference %s.' % (ppl_to_str(ppl), pref_to_str(pref)))
-                        print()
-                        continue
-                else:
-                    # Discard all groups in dups_all_members
-                    dups_all_members = list(dups_all_members)
-                    dups_all_members.sort()
-                    dups_all_members.reverse()  # Delete in reverse index order to preserve indexes
-                    for i in dups_all_members:
-                        print('Discarding Group %s with preference %s.' % (ppl_to_str(groups[i]), pref_to_str(prefs[i])))
-                        for p in groups[i]:  # Update pref_submitted
-                            x = pref_submitted.get(p, 0) - 1
-                            pref_submitted[p] = x
-                            if x <= 0:
-                                del pref_submitted[p]
-                        del groups[i]
-                        del prefs[i]
-
-                print()
-
-            # Add new group
-            groups.append(ppl)
-            pref_submitted.update({p: pref_submitted.get(p, 0) + 1 for p in ppl})
+                pref = [(x if x != NUM_TOPICS else -1) for x in pref]
             prefs.append(pref)
-
     # Adds students without preferences
     for i in range(len(netids)):
         if i not in pref_submitted:
@@ -203,11 +112,12 @@ def dp():
         :return: List of new states as tuple
         """
         new_amount = (fix_amount if fix_amount != -1 else old_state[topic] + inc_amount)
-        new_amounts = [new_amount % GROUP_SIZE]  # Forced to be in [0,3]
-        #if new_amount <= MAX_GROUP_SIZE:
-        #    new_amounts.append(new_amount)  # e.g. 5
-        #if new_amount > GROUP_SIZE:
-        #    new_amounts.append(new_amount % GROUP_SIZE)  # e.g. 1
+        new_amounts = []
+        if new_amount <= MAX_GROUP_SIZE:
+            new_amounts.append(new_amount)  # e.g. 5
+        if new_amount > GROUP_SIZE:
+            new_amounts.append(new_amount % GROUP_SIZE)  # e.g. 1
+            # So that 5 people can either form a group on their own, or rearrange a group of 4 and have 1 person join the next group
         return [tuple((old_state[i] if i != topic else amount)
                       for i in range(len(old_state)))
                 for amount in new_amounts]
@@ -468,7 +378,7 @@ def output(project_groups, filename):
         for proj_group in project_groups:
             person_ids = [person_id for group_id in proj_group[0] for person_id in groups[group_id]]
             strs = [netids[id] for id in person_ids] + [str(proj_group[1] + 1)]
-            f.write(','.join(strs) + '\n')
+            f.write(', '.join(strs) + '\n')
 
 
 def run():
